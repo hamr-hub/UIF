@@ -254,7 +254,63 @@ func SaveCoreConfig(config string) error {
 	}
 	config = strings.Replace(config, "\"UIFAPIPort\"", GetHttpApiPort(), 1)
 	config = strings.Replace(config, "\"UIFAPIPortDirect\"", GetHttpApiPortDirect(), 1)
+	config = sanitizeCoreConfigForRuntime(config)
 	return os.WriteFile(GetCoreConfigPath(), []byte(config), 0644) // Create new if it is not exist
+}
+
+func shouldDisableSystemProxyForCore() bool {
+	return IsLinux() && os.Geteuid() == 0
+}
+
+func shouldDisableTunAutoRouteForCore() bool {
+	return IsLinux() && os.Geteuid() == 0
+}
+
+func sanitizeCoreConfigForRuntime(config string) string {
+	var decoded any
+	if err := json.Unmarshal([]byte(config), &decoded); err != nil {
+		return config
+	}
+	if !sanitizeCoreConfigValue(decoded) {
+		return config
+	}
+	encoded, err := json.MarshalIndent(decoded, "", "  ")
+	if err != nil {
+		return config
+	}
+	return string(encoded)
+}
+
+func sanitizeCoreConfigValue(value any) bool {
+	changed := false
+	switch item := value.(type) {
+	case map[string]any:
+		protocol, _ := item["type"].(string)
+		if shouldDisableSystemProxyForCore() && (protocol == "mixed" || protocol == "http" || protocol == "socks") {
+			if current, ok := item["set_system_proxy"]; ok && current != false {
+				item["set_system_proxy"] = false
+				changed = true
+			}
+		}
+		if shouldDisableTunAutoRouteForCore() && protocol == "tun" {
+			if current, ok := item["auto_route"]; ok && current != false {
+				item["auto_route"] = false
+				changed = true
+			}
+		}
+		for _, child := range item {
+			if sanitizeCoreConfigValue(child) {
+				changed = true
+			}
+		}
+	case []any:
+		for _, child := range item {
+			if sanitizeCoreConfigValue(child) {
+				changed = true
+			}
+		}
+	}
+	return changed
 }
 
 func ReadUIFConfig() string {
@@ -387,6 +443,11 @@ func GetWebAddress() string {
 		webAddressCache = ReadFileOneLine(path)
 	}
 	return webAddressCache
+}
+
+func IsWebDisabled() bool {
+	address := strings.ToLower(strings.TrimSpace(GetWebAddress()))
+	return address == "" || address == "disabled" || address == "off" || address == "none"
 }
 
 type Cert struct {
@@ -553,6 +614,9 @@ func OpenBrowser(url string) error {
 }
 
 func IsOpenBrowser() bool {
+	if IsWebDisabled() {
+		return false
+	}
 	if IsLinux() || HasFlutter() {
 		return false
 	}

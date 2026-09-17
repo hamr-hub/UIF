@@ -32,7 +32,7 @@ func getEncoding(charset string) (encoding.Encoding, error) {
 }
 
 func GetProxyHTTPUA() string {
-	return "uif/clash-meta/mihomo/clash/sing-box/" + GetCurrentUIFVersion()
+	return "ClashforWindows/0.20.39"
 }
 
 type ExtraMsg struct {
@@ -46,6 +46,17 @@ type HTTPRes struct {
 	Error     error
 	ExtraMsg  string
 	IsTimeout bool
+}
+
+func setProxyHTTPHeaders(req *http.Request, hasBody bool) {
+	req.Header.Set("User-Agent", GetProxyHTTPUA())
+	req.Header.Set("Accept", "*/*")
+	req.Header.Set("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
+	req.Header.Set("Cache-Control", "no-cache")
+	req.Header.Set("Pragma", "no-cache")
+	if hasBody {
+		req.Header.Set("Content-Type", "text/plain; charset=utf-8")
+	}
 }
 
 func HTTPWithProxyPort(dst string, proxyPort string,
@@ -63,6 +74,7 @@ func HTTPWithProxyPort(dst string, proxyPort string,
 	if method == "" {
 		method = "GET"
 	}
+	method = strings.ToUpper(method)
 
 	// 针对 GET 和 HEAD 请求，不传递请求体
 	var body io.Reader
@@ -80,9 +92,7 @@ func HTTPWithProxyPort(dst string, proxyPort string,
 	if authorization != "" {
 		req.Header.Set("Authorization", "Bearer "+authorization)
 	}
-	req.Header.Set("User-Agent", GetProxyHTTPUA())
-	req.Header.Set("Content-Type", "text/plain; charset=utf-8")
-	// req.Header.Set("Content-Type", "application/json; charset=utf-8")
+	setProxyHTTPHeaders(req, body != nil)
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -121,6 +131,10 @@ func HTTPWithProxyPort(dst string, proxyPort string,
 	extraMsg.ProfileWebPageUrl = resp.Header.Get("profile-web-page-url")
 	extraMsgByte, _ := json.Marshal(extraMsg)
 
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return "", string(extraMsgByte), fmt.Errorf("HTTP %d %s: %s", resp.StatusCode, http.StatusText(resp.StatusCode), strings.TrimSpace(string(utf8Data)))
+	}
+
 	return string(utf8Data), string(extraMsgByte), nil
 }
 
@@ -140,7 +154,7 @@ func ProxyGet(dst string, proxyFirst bool, isMutiple bool) (string, string) {
 		res.Status = 2
 		res.Res = "dst can not be empty."
 	} else if isMutiple {
-		r := HTTPMutiple(dst)
+		r := HTTPMutiple(dst, proxyFirst)
 		extraMsg = r.ExtraMsg
 		res.Res = r.Res
 		if r.Error != nil {
@@ -175,7 +189,51 @@ func ProxyGet(dst string, proxyFirst bool, isMutiple bool) (string, string) {
 	return string(temp), extraMsg
 }
 
-func HTTPMutiple(dst string) *HTTPRes {
+func isSecureSubscribeURL(dst string) bool {
+	u, err := url.Parse(dst)
+	if err != nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(u.Path), "securesubscribe")
+}
+
+func isHTTPStatusError(err error) bool {
+	return err != nil && strings.HasPrefix(err.Error(), "HTTP ")
+}
+
+func betterHTTPRes(candidate *HTTPRes, current *HTTPRes) bool {
+	if current == nil {
+		return true
+	}
+	if candidate == nil {
+		return false
+	}
+	if candidate.Error == nil {
+		return true
+	}
+	if isHTTPStatusError(candidate.Error) && !isHTTPStatusError(current.Error) {
+		return true
+	}
+	return false
+}
+
+func HTTPSingleRoute(dst string, proxyFirst bool) *HTTPRes {
+	res := &HTTPRes{}
+	if proxyFirst {
+		res.Res, res.ExtraMsg, res.Error = HTTPGetProxy(dst)
+	} else {
+		res.Res, res.ExtraMsg, res.Error = HTTPGetDirect(dst)
+	}
+	return res
+}
+
+func HTTPMutiple(dst string, proxyFirst bool) *HTTPRes {
+	if isSecureSubscribeURL(dst) {
+		// secureSubscribe links are often IP-bound. Keep them on one selected
+		// exit instead of probing both direct and proxy routes.
+		return HTTPSingleRoute(dst, proxyFirst)
+	}
+
 	ch := make(chan *HTTPRes, 3)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -213,15 +271,23 @@ func HTTPMutiple(dst string) *HTTPRes {
 	}()
 
 	tryCount := 0
+	var lastErr *HTTPRes
 	for i := 0; i < 3; i++ {
 		select {
 		case res := <-ch:
 			if !res.IsTimeout {
 				tryCount++
 			}
-			if res.Error == nil || res.IsTimeout || tryCount >= 2 {
+			if res.Error == nil {
 				cancel()
 				return res
+			}
+			if betterHTTPRes(res, lastErr) {
+				lastErr = res
+			}
+			if res.IsTimeout || tryCount >= 2 {
+				cancel()
+				return lastErr
 			}
 		case <-ctx.Done():
 			return &HTTPRes{Error: errors.New("request cancelled")}

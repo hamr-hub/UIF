@@ -142,8 +142,10 @@ func Service(w http.ResponseWriter, r *http.Request) {
 		uif.SetCoreAutoRestartTicker()
 	} else if path == "/run_core" {
 		TryOpenPort(r.FormValue("inboudPorts"))
-		config := r.FormValue("config")
-		uif.SaveCoreConfig(config)
+		config := strings.TrimSpace(r.FormValue("config"))
+		if config != "" {
+			uif.SaveCoreConfig(config)
+		}
 		if uif.IsMacos() && uif.IsUseTun() {
 			uif.SetOsDNS(false, "")
 		}
@@ -205,13 +207,15 @@ func Service(w http.ResponseWriter, r *http.Request) {
 }
 
 func CheckPort() error {
-	webPort, err := uif.GetWebAddressPort()
-	if err != nil {
-		return err
-	}
-	_, err = uif.TCPPortCheck(webPort)
-	if err != nil {
-		return err
+	if !uif.IsWebDisabled() {
+		webPort, err := uif.GetWebAddressPort()
+		if err != nil {
+			return err
+		}
+		_, err = uif.TCPPortCheck(webPort)
+		if err != nil {
+			return err
+		}
 	}
 
 	apiPort, err := uif.GetAPIAddressPort()
@@ -231,12 +235,16 @@ func CheckPort() error {
 }
 
 func RunServer() error {
-	web := http.FileServer(http.Dir(uif.GetWebPath()))
-	WebServer = http.Server{
-		Addr:    uif.GetWebAddress(),
-		Handler: web,
+	if uif.IsWebDisabled() {
+		uif.WriteLog("Web server disabled.")
+	} else {
+		web := http.FileServer(http.Dir(uif.GetWebPath()))
+		WebServer = http.Server{
+			Addr:    uif.GetWebAddress(),
+			Handler: web,
+		}
+		go WebServer.ListenAndServe()
 	}
-	go WebServer.ListenAndServe()
 
 	api := http.NewServeMux()
 	api.HandleFunc("/delay", TestNode)
@@ -251,11 +259,13 @@ func RunServer() error {
 }
 
 func CloseServer() {
-	err := WebServer.Close()
-	if err != nil {
-		panic(err)
+	if !uif.IsWebDisabled() {
+		err := WebServer.Close()
+		if err != nil {
+			panic(err)
+		}
 	}
-	err = APIServer.Close()
+	err := APIServer.Close()
 	if err != nil {
 		panic(err)
 	}
@@ -383,6 +393,10 @@ func printPortInfo(address string, t string) {
 
 func PrintPortInfo() {
 	printPortInfo(uif.GetAPIAddress(), "API")
+	if uif.IsWebDisabled() {
+		uif.WriteLog("Web Server: disabled")
+		return
+	}
 	printPortInfo(uif.GetWebAddress(), "Web")
 
 	outboundIP := uif.GetOutboundIP()
