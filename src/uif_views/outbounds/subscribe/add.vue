@@ -53,6 +53,18 @@
       </el-form-item>
 
       <el-form-item
+        :label="$translator({ cn: '拉取线路', en: 'Fetch route' })"
+        v-if="uif.subscribe.info.type == 'link'"
+      >
+        <el-radio v-model="uif.subscribe.info.proxyFirst" :label="false">
+          {{ $translator({ cn: "直连", en: "Direct" }) }}
+        </el-radio>
+        <el-radio v-model="uif.subscribe.info.proxyFirst" :label="true">
+          {{ $translator({ cn: "代理", en: "Proxy" }) }}
+        </el-radio>
+      </el-form-item>
+
+      <el-form-item
         :label="$translator({ cn: '数据', en: 'Data' })"
         v-if="uif.subscribe.info.type == 'data'"
       >

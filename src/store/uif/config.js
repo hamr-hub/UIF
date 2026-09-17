@@ -72,6 +72,7 @@ var subscribe = {
   updateTime: new Date().valueOf(),
   type: "link",
   data: "",
+  proxyFirst: false,
   updateGap: "0",
   enabled: false,
   isCollapsed: false,
@@ -116,9 +117,9 @@ export function newDefaultHttpIn() {
   res.enabled = false;
   res.protocol = "mixed";
   res.transport.address = "127.0.0.1";
-  res.transport.port = 9110;
+  res.transport.port = 10110;
   res.id = uuidv4();
-  res.setting.set_system_proxy = true;
+  res.setting.set_system_proxy = false;
   return res;
 }
 
@@ -134,7 +135,7 @@ export function newDefaultTunIn(mode) {
     inet6_address: "",
     inet4_range: "198.18.0.0/15",
     inet6_range: "",
-    auto_route: true,
+    auto_route: false,
     mtu: 9000,
     strict_route: false,
     stack: "gvisor",

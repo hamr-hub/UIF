@@ -1,11 +1,11 @@
 package main
 
 import (
-    "fmt"
-    "os"
-    "path/filepath"
+	"fmt"
+	"os"
+	"path/filepath"
 
-    "github.com/uif/uifd/uif"
+	"github.com/uif/uifd/uif"
 )
 
 func UpdateSingBoxCore() {
@@ -133,7 +133,7 @@ func UpdateSetup() {
 }
 
 func main() {
-	uif.ApiPort = 9110
+	uif.ApiPort = 10110
 	UpdateSingBoxCore()
 	// UpdateSetup()
 	// UpdateFRPCore()

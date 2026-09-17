@@ -150,10 +150,10 @@ export default {
       inet6_address: "",
       inet6_range: "fc00::/18",
 
-      auto_route: true,
+      auto_route: false,
       strict_route: false,
       mtu: "",
-      stack: "system",
+      stack: "gvisor",
       mode: "fakeip",
     };
     this.outbound_obj.setting = InitSetting(this.outbound_obj.setting, setting);

@@ -47,7 +47,7 @@ func DeleteVersionDir(usingVersion string, rootPath string) error {
 	}
 
 	for _, file := range files {
-		if file.IsDir() && usingVersion != file.Name() {
+		if file.IsDir() && usingVersion != file.Name() && ParseVersion(file.Name()) > 0 {
 			dirPath := filepath.Join(rootPath, file.Name())
 			if err := os.RemoveAll(dirPath); err != nil {
 				return fmt.Errorf("failed to delete directory %s: %w", dirPath, err)

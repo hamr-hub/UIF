@@ -230,7 +230,7 @@ export function AddTun(res, config) {
     // "sniff": true,
     // "gso": true,
     "strict_route": setting['strict_route'],
-    "auto_route": setting['auto_route'],
+    "auto_route": false,
   };
 
   if (setting['mode'] == 'fakeip') {

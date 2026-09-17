@@ -84,7 +84,7 @@ var defaultState = {
     isConnecting: false,
     path: "",
     version: "-",
-    web_version: "26.01.03",
+    web_version: "26.03.11",
     coreVersion: "-",
     ip: "127.0.0.1",
     coreStatus: 3,
@@ -1197,6 +1197,7 @@ async function UpdateSub2(info, isUpdatingExtraData) {
       dst = dst.replaceAll("\t", "");
       var res = await MyPost(state.apiAddress + "/http_mutiple", {
         dst: dst,
+        proxy_first: info.proxyFirst ? "true" : "false",
       });
       console.log(res);
     } catch (error) {
