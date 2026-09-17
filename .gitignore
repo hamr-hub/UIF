@@ -28,3 +28,12 @@ web_dist
 webs_dist
 web
 webs
+
+# runtime
+cache.db
+cores/
+version/
+share.json
+uif_api_address.txt
+uif_web_address.txt
+uifd/*/
